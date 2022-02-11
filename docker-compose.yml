@@ -1,0 +1,122 @@
+version: "3.7"
+
+services:
+  mysql-master:
+    container_name: mysql-master
+    hostname: mysql-master
+    image: ${IMAGE}
+    volumes:
+      - ${DIR_LOCAL_MASTER}:/var/lib/mysql
+    networks:
+      custom-net:
+        ipv4_address: ${MASTER_IP}
+    ports:
+      - 1186:1186
+    deploy:
+      resources:
+        limits:
+          cpus: ${MASTER_CPUS}
+          memory: ${MASTER_MEMORY}
+    restart: unless-stopped
+    command: ndb_mgmd 
+
+  mysql-datanode1:
+    container_name: mysql-datanode1
+    hostname: mysql-datanode1
+    image: ${IMAGE}
+    volumes:
+      - ${DIR_LOCAL_DATA1}:/var/lib/mysql
+    networks:
+      custom-net:
+        ipv4_address: ${DATA1_IP}
+    deploy:
+      resources:
+        limits:
+          cpus: ${DATA_CPUS}
+          memory: ${DATA_MEMORY}
+    restart: unless-stopped
+    depends_on:
+      - mysql-master
+    command: ndbd
+
+  mysql-datanode2:
+    container_name: mysql-datanode2
+    hostname: mysql-datanode2
+    image: ${IMAGE}
+    volumes:
+      - ${DIR_LOCAL_DATA2}:/var/lib/mysql
+    networks:
+      custom-net:
+        ipv4_address: ${DATA2_IP}
+    deploy:
+      resources:
+        limits:
+          cpus: ${DATA_CPUS}
+          memory: ${DATA_MEMORY}
+    restart: unless-stopped
+    depends_on:
+      - mysql-master
+    command: ndbd
+
+  mysql-server:
+    container_name: mysql-server
+    hostname: mysql-server
+    image: ${IMAGE}
+    env_file:
+      - .env
+      - ./config/credential.ini
+    environment:
+      MYSQL_ROOT_HOST: '%'
+      MYSQL_DATABASE: test_db
+      MYSQL_USER: $USER_DATABASE
+    volumes:
+      - ${DIR_LOCAL_SERVER}:/var/lib/mysql
+    networks:
+      custom-net:
+        ipv4_address: ${SERVER_IP}
+    ports:
+      - 3306:3306
+    deploy:
+      resources:
+        limits:
+          cpus: ${SERVER_CPUS}
+          memory: ${SERVER_MEMORY}
+    restart: unless-stopped
+    depends_on:
+      - mysql-master
+      - mysql-datanode1
+      - mysql-datanode2
+    command: mysqld 
+
+  mysql-workbench:
+    container_name: mysql-workbench
+    hostname: mysql-workbench
+    image: ${IMAGE_WEB}
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Taipei
+    volumes:
+      - ${DIR_LOCAL_WORKBENCH}:/config
+    networks:
+      custom-net:
+        ipv4_address: ${BENCH_IP}
+    ports:
+      - 13000:3000
+    cap_add:
+      - IPC_LOCK
+    deploy:
+      resources:
+        limits:
+          cpus: ${BENCH_CPUS}
+          memory: ${BENCH_MEMORY}
+    restart: unless-stopped
+    depends_on:
+      - mysql-server
+
+### Network & Volume
+
+networks:
+  custom-net:
+    external:
+      name: ${CUSTOM_NET}
